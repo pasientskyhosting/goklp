@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/tls"
 	"fmt"
+	"github.com/asaskevich/govalidator"
 	"github.com/docopt/docopt-go"
 	"github.com/kardianos/osext"
 	"github.com/vaughan0/go-ini"
@@ -236,7 +237,11 @@ func getOpts() (*opts, error) {
 
 	o.username = arguments["<username>"].(string)
 	if arguments["--config"] != nil {
-		o.goklp_config_file = arguments["--config"].(string)
+		if ok, _ := govalidator.IsFilePath(arguments["--config"].(string)); ok == false {
+			panic(err)
+		} else {
+			o.goklp_config_file = arguments["--config"].(string)
+		}
 	} else {
 		o.goklp_config_file = ""
 
