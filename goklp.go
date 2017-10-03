@@ -271,7 +271,7 @@ func findConfigFile(argConfigFile string) (string, error) {
 
 	// enforce reasonable config file security
 	if !strings.HasSuffix(fileInfo.Mode().String(), "------") {
-		errMsg := "Permissions on goklp.ini are too loose - try a 'chmod 600 goklp.ini'"
+		errMsg := fmt.Sprintf("Permissions on goklp.ini are too loose - try 'chmod 0600 %s'", configFile)
 		fmt.Errorf(errMsg)
 		log.Fatal(errMsg)
 		return "", err
