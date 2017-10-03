@@ -22,12 +22,14 @@ var usage = `goklp: OpenSSH Keys LDAP Provider for AuthorizedKeysCommand
 
 Usage:
 	goklp <username>
+	goklp [--config=<config>] <username>
 	goklp -h --help
 	goklp --version
 
 Options:
 	--version              Show version.
 	-h, --help             Show this screen.
+	-c, --config=<file>    Path to goklp config file
 
 Config file is required, named: goklp.ini or passed using --config=/path/to/file
 	goklp_ldap_uri              = ldaps://server1:636,ldaps://server2:636   (required)
@@ -42,6 +44,7 @@ Config file is required, named: goklp.ini or passed using --config=/path/to/file
 
 type opts struct {
 	username                   string
+	goklp_config_file          string
 	goklp_ldap_base_dn         string
 	goklp_ldap_bind_dn         string
 	goklp_ldap_bind_pw         string
@@ -83,7 +86,7 @@ func main() {
 	log.SetOutput(logger)
 
 	// Finding our config file to parse
-	configFile, err := findConfigFile()
+	configFile, err := findConfigFile(o.goklp_config_file)
 	logger.Info(fmt.Sprintf("Using config file %s", configFile))
 
 	err = parseConfigFile(configFile, o)
@@ -232,18 +235,28 @@ func getOpts() (*opts, error) {
 	}
 
 	o.username = arguments["<username>"].(string)
+	if arguments["--config"] != nil {
+		o.goklp_config_file = arguments["--config"].(string)
+	} else {
+		o.goklp_config_file = ""
+
+	}
 	return o, nil
 }
 
-func findConfigFile() (string, error) {
+func findConfigFile(argConfigFile string) (string, error) {
 	var configFile string
 
-	myDirectory, err := osext.ExecutableFolder()
-	if err != nil {
-		log.Fatal(err)
-		return "", err
+	if len(argConfigFile) > 0 {
+		configFile = argConfigFile
+	} else {
+		myDirectory, err := osext.ExecutableFolder()
+		if err != nil {
+			log.Fatal(err)
+			return "", err
+		}
+		configFile = myDirectory + "/goklp.ini"
 	}
-	configFile = myDirectory + "/goklp.ini"
 
 	fileInfo, err := os.Stat(configFile)
 	if err != nil {
