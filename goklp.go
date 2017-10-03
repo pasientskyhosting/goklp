@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"github.com/docopt/docopt-go"
 	"github.com/kardianos/osext"
-	"github.com/nmcclain/ldap"
 	"github.com/vaughan0/go-ini"
+	"gopkg.in/ldap.v2"
 	"log"
 	"log/syslog"
 	"net/url"
@@ -21,23 +21,23 @@ const version = "1.5"
 var usage = `goklp: OpenSSH Keys LDAP Provider for AuthorizedKeysCommand
 
 Usage:
-  goklp <username>
-  goklp -h --help
-  goklp --version
-
-Config file is required, named: goklp.ini
-  goklp_ldap_uri              = ldaps://server1:636,ldaps://server2:636   (required)
-  goklp_ldap_bind_dn          = CN=someuser,O=someorg,C=sometld           (required)
-  goklp_ldap_base_dn          = O=someorg,C=sometld                       (required)
-  goklp_ldap_bind_pw          = someSecretPassword                        (required)
-  goklp_ldap_timeout_secs     = 10                           (optional - default: 5)
-  goklp_ldap_user_attr        = 10                           (optional - default: uid)
-  goklp_debug                 = true                     (optional - default: false)
-  goklp_insecure_skip_verify  = false                    (optional - default: false)
+	goklp <username>
+	goklp -h --help
+	goklp --version
 
 Options:
-  --version       Show version.
-  -h, --help      Show this screen.
+	--version              Show version.
+	-h, --help             Show this screen.
+
+Config file is required, named: goklp.ini or passed using --config=/path/to/file
+	goklp_ldap_uri              = ldaps://server1:636,ldaps://server2:636   (required)
+	goklp_ldap_bind_dn          = CN=someuser,O=someorg,C=sometld           (required)
+	goklp_ldap_base_dn          = O=someorg,C=sometld                       (required)
+	goklp_ldap_bind_pw          = someSecretPassword                        (required)
+	goklp_ldap_timeout_secs     = 10                           (optional - default: 5)
+	goklp_ldap_user_attr        = 10                           (optional - default: uid)
+	goklp_debug                 = true                     (optional - default: false)
+	goklp_insecure_skip_verify  = false                    (optional - default: false)
 `
 
 type opts struct {
@@ -82,6 +82,15 @@ func main() {
 	}
 	log.SetOutput(logger)
 
+	// Finding our config file to parse
+	configFile, err := findConfigFile()
+	logger.Info(fmt.Sprintf("Using config file %s", configFile))
+
+	err = parseConfigFile(configFile, o)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	// run ldapsearch
 	keys, err := o.ldapsearch()
 	if err != nil {
@@ -115,6 +124,7 @@ func (o *opts) ldapsearch() ([]string, error) {
 		go func() {
 			sr, err := o.doquery(q)
 			if err != nil {
+				log.Fatal(err)
 				return
 			}
 			r := result{sr: sr, ldapURL: q.ldapURL}
@@ -176,6 +186,8 @@ func (o *opts) doquery(q query) (*ldap.SearchResult, error) {
 		tlsConfig := tls.Config{}
 		if o.goklp_insecure_skip_verify {
 			tlsConfig.InsecureSkipVerify = true
+		} else {
+			tlsConfig.ServerName = hostname
 		}
 		l, err = ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", hostname, port), &tlsConfig)
 		if err != nil {
@@ -220,44 +232,59 @@ func getOpts() (*opts, error) {
 	}
 
 	o.username = arguments["<username>"].(string)
+	return o, nil
+}
 
-	// handle config file
+func findConfigFile() (string, error) {
+	var configFile string
+
 	myDirectory, err := osext.ExecutableFolder()
 	if err != nil {
-		return o, err
+		log.Fatal(err)
+		return "", err
 	}
-	configFile := myDirectory + "/goklp.ini"
+	configFile = myDirectory + "/goklp.ini"
+
 	fileInfo, err := os.Stat(configFile)
 	if err != nil {
-		return o, err
+		log.Fatal(err)
+		return "", err
 	}
 
 	// enforce reasonable config file security
 	if !strings.HasSuffix(fileInfo.Mode().String(), "------") {
-		return o, fmt.Errorf("Permissions on goklp.ini are too loose - try a 'chmod 600 goklp.ini'")
+		errMsg := "Permissions on goklp.ini are too loose - try a 'chmod 600 goklp.ini'"
+		fmt.Errorf(errMsg)
+		log.Fatal(errMsg)
+		return "", err
 	}
+	return configFile, nil
+}
+
+func parseConfigFile(configFile string, o *opts) error {
+	// handle config file
 
 	config, err := ini.LoadFile(configFile)
 	if err != nil {
-		return o, err
+		return err
 	}
 
 	goklp_ldap_uri, exists := config[""]["goklp_ldap_uri"]
 	if !exists {
-		return o, fmt.Errorf("Config option goklp_ldap_uri is not set.")
+		return fmt.Errorf("Config option goklp_ldap_uri is not set.")
 	}
 	o.goklp_ldap_uris = strings.Split(goklp_ldap_uri, ",")
 	o.goklp_ldap_bind_dn, exists = config[""]["goklp_ldap_bind_dn"]
 	if !exists {
-		return o, fmt.Errorf("Config option goklp_ldap_bind_dn is not set.")
+		return fmt.Errorf("Config option goklp_ldap_bind_dn is not set.")
 	}
 	o.goklp_ldap_base_dn, exists = config[""]["goklp_ldap_base_dn"]
 	if !exists {
-		return o, fmt.Errorf("Config option goklp_ldap_base_dn is not set.")
+		return fmt.Errorf("Config option goklp_ldap_base_dn is not set.")
 	}
 	o.goklp_ldap_bind_pw, exists = config[""]["goklp_ldap_bind_pw"]
 	if !exists {
-		return o, fmt.Errorf("Config option goklp_ldap_bind_pw is not set.")
+		return fmt.Errorf("Config option goklp_ldap_bind_pw is not set.")
 	}
 
 	// default to 5 second timeout
@@ -266,7 +293,7 @@ func getOpts() (*opts, error) {
 	if exists {
 		goklp_ldap_timeout_secs, err = strconv.Atoi(goklp_ldap_timeout_str)
 		if err != nil {
-			return o, fmt.Errorf("Invalid timeout in goklp_ldap_timeout.")
+			return fmt.Errorf("Invalid timeout in goklp_ldap_timeout.")
 		}
 	}
 	o.goklp_ldap_timeout = time.Duration(goklp_ldap_timeout_secs) * time.Second
@@ -285,5 +312,5 @@ func getOpts() (*opts, error) {
 	if s, exists := config[""]["goklp_insecure_skip_verify"]; exists && s == "true" {
 		o.goklp_insecure_skip_verify = true
 	}
-	return o, nil
+	return nil
 }
