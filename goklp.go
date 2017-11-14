@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-const version = "1.5"
+const version = "2.0"
 
 var usage = `goklp: OpenSSH Keys LDAP Provider for AuthorizedKeysCommand
 
