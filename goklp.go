@@ -148,7 +148,7 @@ func (o *opts) ldapsearch() ([]string, error) {
     }
     if len(r.sr.Entries) == 1 {
       for _, attr := range r.sr.Entries[0].Attributes {
-        if attr.Name == "sshPublicKey" {
+        if attr.Name == o.goklp_ldap_ssh_key_attr {
           keys = append(keys, attr.Values...)
         }
       }
