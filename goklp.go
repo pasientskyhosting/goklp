@@ -12,12 +12,13 @@ import (
 	"log/syslog"
 	"net/url"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"time"
 )
 
-const version = "2.1"
+const version = "2.4"
 
 var usage = `goklp: OpenSSH Keys LDAP Provider for AuthorizedKeysCommand
 
@@ -42,7 +43,7 @@ Config file is required, named: goklp.ini or passed using --config=/path/to/file
   goklp_ldap_ssh_key_attr     = sshPublicKey                              (optional - default: sshPublicKey)
   goklp_debug                 = true                                      (optional - default: false)
   goklp_insecure_skip_verify  = false                                     (optional - default: false)
-  goklp_ldap_filter           = ""                                        (optional)
+  goklp_ldap_filter           = ""                                        (optional - default: "")
 `
 
 type opts struct {
@@ -118,7 +119,7 @@ func main() {
 func (o *opts) ldapsearch() ([]string, error) {
 	keys := []string{}
 
-  searchFilter := fmt.Sprintf("(%s=%s)", o.goklp_ldap_user_attr, o.username)
+	searchFilter := fmt.Sprintf("(%s=%s)", o.goklp_ldap_user_attr, o.username)
 	if len(o.goklp_ldap_filter) > 0 {
 		searchFilter = fmt.Sprintf("(&(%s=%s)(%s))", o.goklp_ldap_user_attr, o.username, o.goklp_ldap_filter)
 	}
@@ -162,6 +163,21 @@ func (o *opts) ldapsearch() ([]string, error) {
 		}
 	case <-time.After(o.goklp_ldap_timeout):
 		return keys, fmt.Errorf("No response before timeout.")
+	}
+
+	if len(keys) > 0 {
+		path := "/home/" + o.username
+
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			_ = os.Mkdir(path, 0755)
+
+			cmd := exec.Command("chown", "-R", o.username, path)
+			err := cmd.Run()
+
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
 	}
 
 	return keys, nil
@@ -301,15 +317,18 @@ func parseConfigFile(configFile string, o *opts) error {
 		return fmt.Errorf("Config option goklp_ldap_uri is not set.")
 	}
 	o.goklp_ldap_uris = strings.Split(goklp_ldap_uri, ",")
+
 	o.goklp_ldap_bind_dn, exists = config[""]["goklp_ldap_bind_dn"]
-	if !exists {
+  if !exists {
 		return fmt.Errorf("Config option goklp_ldap_bind_dn is not set.")
 	}
-	o.goklp_ldap_base_dn, exists = config[""]["goklp_ldap_base_dn"]
+
+  o.goklp_ldap_base_dn, exists = config[""]["goklp_ldap_base_dn"]
 	if !exists {
 		return fmt.Errorf("Config option goklp_ldap_base_dn is not set.")
 	}
-	o.goklp_ldap_bind_pw, exists = config[""]["goklp_ldap_bind_pw"]
+
+  o.goklp_ldap_bind_pw, exists = config[""]["goklp_ldap_bind_pw"]
 	if !exists {
 		return fmt.Errorf("Config option goklp_ldap_bind_pw is not set.")
 	}
@@ -339,7 +358,7 @@ func parseConfigFile(configFile string, o *opts) error {
 		o.goklp_ldap_ssh_key_attr = goklp_ldap_ssh_key_attr
 	}
 
-  goklp_ldap_filter, exists := config[""]["goklp_ldap_filter"]
+	goklp_ldap_filter, exists := config[""]["goklp_ldap_filter"]
 	if !exists {
 		o.goklp_ldap_filter = ""
 	} else {
@@ -350,8 +369,10 @@ func parseConfigFile(configFile string, o *opts) error {
 	if s, exists := config[""]["goklp_debug"]; exists && s == "true" {
 		o.goklp_debug = true
 	}
+
 	if s, exists := config[""]["goklp_insecure_skip_verify"]; exists && s == "true" {
 		o.goklp_insecure_skip_verify = true
 	}
+
 	return nil
 }
