@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/tls"
 	"fmt"
-	"github.com/asaskevich/govalidator"
 	"github.com/docopt/docopt-go"
 	"github.com/kardianos/osext"
 	"github.com/vaughan0/go-ini"
@@ -84,6 +83,9 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// Finding our config file to parse
+	configFile, err := findConfigFile(o.goklp_config_file)
+
 	// setup logging
 	logger, err := syslog.New(syslog.LOG_ALERT|syslog.LOG_USER, "goklp")
 	if err != nil {
@@ -91,14 +93,12 @@ func main() {
 	}
 	log.SetOutput(logger)
 
-	// Finding our config file to parse
-	configFile, err := findConfigFile(o.goklp_config_file)
-	logger.Info(fmt.Sprintf("Using config file %s", configFile))
-
 	err = parseConfigFile(configFile, o)
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	logger.Info(fmt.Sprintf("Using config file %s", configFile))
 
 	// run ldapsearch
 	keys, err := o.ldapsearch()
@@ -261,16 +261,13 @@ func getOpts() (*opts, error) {
 	}
 
 	o.username = arguments["<username>"].(string)
+
 	if arguments["--config"] != nil {
-		if ok, _ := govalidator.IsFilePath(arguments["--config"].(string)); ok == false {
-			panic(err)
-		} else {
-			o.goklp_config_file = arguments["--config"].(string)
-		}
+		o.goklp_config_file = arguments["--config"].(string)
 	} else {
 		o.goklp_config_file = ""
-
 	}
+
 	return o, nil
 }
 
@@ -290,7 +287,9 @@ func findConfigFile(argConfigFile string) (string, error) {
 
 	fileInfo, err := os.Stat(configFile)
 	if err != nil {
-		log.Fatal(err)
+		errMsg := fmt.Sprintf("Config file: %s - no such file or directory", configFile)
+		fmt.Errorf(errMsg)
+		log.Fatal(errMsg)
 		return "", err
 	}
 
@@ -301,6 +300,7 @@ func findConfigFile(argConfigFile string) (string, error) {
 		log.Fatal(errMsg)
 		return "", err
 	}
+
 	return configFile, nil
 }
 
@@ -319,16 +319,16 @@ func parseConfigFile(configFile string, o *opts) error {
 	o.goklp_ldap_uris = strings.Split(goklp_ldap_uri, ",")
 
 	o.goklp_ldap_bind_dn, exists = config[""]["goklp_ldap_bind_dn"]
-  if !exists {
+	if !exists {
 		return fmt.Errorf("Config option goklp_ldap_bind_dn is not set.")
 	}
 
-  o.goklp_ldap_base_dn, exists = config[""]["goklp_ldap_base_dn"]
+	o.goklp_ldap_base_dn, exists = config[""]["goklp_ldap_base_dn"]
 	if !exists {
 		return fmt.Errorf("Config option goklp_ldap_base_dn is not set.")
 	}
 
-  o.goklp_ldap_bind_pw, exists = config[""]["goklp_ldap_bind_pw"]
+	o.goklp_ldap_bind_pw, exists = config[""]["goklp_ldap_bind_pw"]
 	if !exists {
 		return fmt.Errorf("Config option goklp_ldap_bind_pw is not set.")
 	}
