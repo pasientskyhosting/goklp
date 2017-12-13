@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -261,6 +262,14 @@ func getOpts() (*opts, error) {
 	}
 
 	o.username = arguments["<username>"].(string)
+
+	isValidUsername := regexp.MustCompile(`^[A-Za-z0-9_\-\.]{0,32}$`).MatchString
+	if !isValidUsername(o.username) {
+		errMsg := fmt.Sprintf("%s is not valid POSIX username to check", o.username)
+		fmt.Errorf(errMsg)
+		log.Fatal(errMsg)
+		return o, nil
+	}
 
 	if arguments["--config"] != nil {
 		o.goklp_config_file = arguments["--config"].(string)
