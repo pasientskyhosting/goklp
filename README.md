@@ -1,6 +1,6 @@
 ![License BSDv2](https://img.shields.io/badge/license-BSDv2-brightgreen.svg)
 
-## goklp: Golang OpenSSH Keys Ldap Provider for AuthorizedKeysCommand
+# goklp: Golang OpenSSH Keys Ldap Provider for AuthorizedKeysCommand
 Forked from [AppliedTrust](https://github.com/AppliedTrust/goklp) and modified for our everyday use.
 
 Improvements:
@@ -8,8 +8,9 @@ Improvements:
  - Added option to specify ldap attribute for ssh key
  - Added builds for OpenBSD and FreeBSD
  - Added auto create home folder if keys are returned for the user
+ - Working with FreeIPA
 
-### Usage:
+## Usage:
 1. Setup goklp.ini - preferly in same directory as goklp or use `--config` option.
 2. Test to ensure goklp returns SSH keys: `goklp <username>`
 
@@ -25,6 +26,12 @@ Options:
   -h, --help             Show this screen.
   -c, --config=<file>    Path to goklp config file
 ```
+
+
+## Debug
+Log output and debugging is piped to syslog. If you provide wrong path for config file or config file permissions is off, the error is written in the console
+
+## Example config
 
 ### goklp.ini config file is required:
 Use the optional ldap_filter if you only want to allow a certain group of users to be able to login.
